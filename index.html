@@ -85,7 +85,16 @@ const KEY = 'btc_at_v3';
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ return null; } }
 function save(){
   try{
-    localStorage.setItem(KEY, JSON.stringify({
+    const payload = {
+      bal:S.bal, startBal:S.startBal, trades:S.trades,
+      active5:S.active5, active15:S.active15,
+      cfg:S.cfg, mart:S.mart, cycles:S.cycles,
+      log:S.log.slice(0,80), savedAt:Date.now()
+    };
+    // Save to server (shared across all devices)
+    fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(()=>{});
+    // Save to localStorage (backup)
+    localStorage.setItem(KEY, JSON.stringify(
       bal:S.bal, startBal:S.startBal, trades:S.trades,
       active5:S.active5, active15:S.active15,
       cfg:S.cfg, apiKey:S.apiKey,
@@ -97,7 +106,25 @@ function save(){
   }catch(e){}
 }
 
-const D = load();
+// Load from server first, fallback to localStorage
+let D = null;
+(async()=>{
+  try{
+    const r = await fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state');
+    if(r.ok){ const d=await r.json(); if(d&&d.savedAt) D=d; }
+  }catch(e){}
+  if(!D) D = load();
+  if(D){
+    S.bal=D.bal??1000; S.startBal=D.startBal??1000;
+    S.trades=D.trades??[]; S.active5=D.active5??null;
+    S.active15=D.active15??null; S.cfg=D.cfg??S.cfg;
+    S.cycles=D.cycles??0; S.mart=D.mart??S.mart;
+    S.log=D.log??[];
+    const age=Math.round((Date.now()-(D.savedAt||0))/60000);
+    S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades · $'+trueBalance().toFixed(2)+' ('+age+'m ago)',type:'ok',ts:Date.now()});
+  }
+  render();
+})();
 
 // ─────────────────────────────────────────────────────────────
 //  STATE
