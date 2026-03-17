@@ -867,17 +867,22 @@ async function init(){
   }catch(e){}
   if(!saved){ try{ saved=JSON.parse(localStorage.getItem('btc_v4')||'null'); }catch(e){} }
   if(saved){
-    S.bal       = saved.bal       ?? 1000;
     S.startBal  = saved.startBal  ?? 1000;
     S.trades    = saved.trades    ?? [];
-    S.active5   = saved.active5   ?? null;
-    S.active15  = saved.active15  ?? null;
     S.cfg       = saved.cfg       ?? S.cfg;
     S.cycles    = saved.cycles    ?? 0;
     S.mart      = saved.mart      ?? S.mart;
     S.log       = saved.log       ?? [];
-    const age   = Math.round((Date.now()-(saved.savedAt||0))/60000);
-    S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades · $'+trueBalance().toFixed(2)+' ('+age+'m ago)',type:'ok',ts:Date.now()});
+    // Restore active trades only if not expired
+    const now   = Date.now();
+    S.active5   = (saved.active5  && saved.active5.exp  > now) ? saved.active5  : null;
+    S.active15  = (saved.active15 && saved.active15.exp > now) ? saved.active15 : null;
+    // Recalculate balance from trades (source of truth)
+    const closedPnl = S.trades.reduce((a,t)=>a+(t.pnl||0), 0);
+    const openStake = (S.active5?S.active5.amt:0)+(S.active15?S.active15.amt:0);
+    S.bal = +(S.startBal + closedPnl - openStake).toFixed(2);
+    const age = Math.round((Date.now()-(saved.savedAt||0))/60000);
+    S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades · $'+S.bal.toFixed(2)+' ('+age+'m ago)',type:'ok',ts:Date.now()});
   }
   addLog('🚀 BTC AutoTrader ready','info');
   addLog('💡 Toggle BOT ON to start trading','info');
