@@ -106,25 +106,7 @@ function save(){
   }catch(e){}
 }
 
-// Load from server first, fallback to localStorage
 let D = null;
-(async()=>{
-  try{
-    const r = await fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state');
-    if(r.ok){ const d=await r.json(); if(d&&d.savedAt) D=d; }
-  }catch(e){}
-  if(!D) D = load();
-  if(D){
-    S.bal=D.bal??1000; S.startBal=D.startBal??1000;
-    S.trades=D.trades??[]; S.active5=D.active5??null;
-    S.active15=D.active15??null; S.cfg=D.cfg??S.cfg;
-    S.cycles=D.cycles??0; S.mart=D.mart??S.mart;
-    S.log=D.log??[];
-    const age=Math.round((Date.now()-(D.savedAt||0))/60000);
-    S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades · $'+trueBalance().toFixed(2)+' ('+age+'m ago)',type:'ok',ts:Date.now()});
-  }
-  render();
-})();
 
 // ─────────────────────────────────────────────────────────────
 //  STATE
@@ -889,12 +871,34 @@ function render(){
 // ─────────────────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────────────────
-addLog('🚀 BTC AutoTrader v3 ready','info');
-addLog('💡 Go to BOT tab to configure, then toggle BOT ON','info');
-addLog('⏱️ Bot syncs to Binance clock before first trade','info');
-setInterval(save, 60000); // autosave every 60s
-fetchData();
-render();
+async function init(){
+  // Load from server, fallback to localStorage
+  let saved = null;
+  try{
+    const r = await fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state');
+    if(r.ok){ const d=await r.json(); if(d&&d.savedAt) saved=d; }
+  }catch(e){}
+  if(!saved){ try{ saved=JSON.parse(localStorage.getItem('btc_v4')||'null'); }catch(e){} }
+  if(saved){
+    S.bal       = saved.bal       ?? 1000;
+    S.startBal  = saved.startBal  ?? 1000;
+    S.trades    = saved.trades    ?? [];
+    S.active5   = saved.active5   ?? null;
+    S.active15  = saved.active15  ?? null;
+    S.cfg       = saved.cfg       ?? S.cfg;
+    S.cycles    = saved.cycles    ?? 0;
+    S.mart      = saved.mart      ?? S.mart;
+    S.log       = saved.log       ?? [];
+    const age   = Math.round((Date.now()-(saved.savedAt||0))/60000);
+    S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades · $'+trueBalance().toFixed(2)+' ('+age+'m ago)',type:'ok',ts:Date.now()});
+  }
+  addLog('🚀 BTC AutoTrader ready','info');
+  addLog('💡 Toggle BOT ON to start trading','info');
+  setInterval(save, 30000);
+  await fetchData();
+  render();
+}
+init();
 </script>
 </body>
 </html>
