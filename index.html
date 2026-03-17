@@ -84,26 +84,13 @@ input[type=range]{width:100%;accent-color:#3355ff}
 const KEY = 'btc_at_v3';
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ return null; } }
 function save(){
-  try{
-    const payload = {
-      bal:S.bal, startBal:S.startBal, trades:S.trades,
-      active5:S.active5, active15:S.active15,
-      cfg:S.cfg, mart:S.mart, cycles:S.cycles,
-      log:S.log.slice(0,80), savedAt:Date.now()
-    };
-    // Save to server (shared across all devices)
-    fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).catch(()=>{});
-    // Save to localStorage (backup)
-    localStorage.setItem(KEY, JSON.stringify(
-      bal:S.bal, startBal:S.startBal, trades:S.trades,
-      active5:S.active5, active15:S.active15,
-      cfg:S.cfg, apiKey:S.apiKey,
-      cycles:S.cycles,
-      mart:S.mart,
-      log:S.log.slice(0,50),
-      savedAt:Date.now()
-    }));
-  }catch(e){}
+  const d={bal:S.bal,startBal:S.startBal,trades:S.trades,
+    active5:S.active5,active15:S.active15,cfg:S.cfg,
+    cycles:S.cycles,mart:S.mart,log:S.log.slice(0,80),
+    savedAt:Date.now()};
+  fetch('https://btcapp-1000204866378.europe-west1.run.app/api/state',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).catch(()=>{});
+  try{localStorage.setItem('btc_v4',JSON.stringify(d));}catch(e){}
 }
 
 let D = null;
