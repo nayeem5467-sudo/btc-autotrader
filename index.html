@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>BTC AutoTrader</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#05050f;color:#c0c0e0;font-family:'IBM Plex Mono',monospace;max-width:480px;margin:0 auto;min-height:100vh}
+.hdr{background:#0c0c1e;border-bottom:1px solid #151530;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10}
+.sync-bar{background:#1a1200;border-bottom:1px solid #ffd74044;padding:7px 16px;text-align:center;font-size:11px;color:#ffd740;letter-spacing:1px;display:none}
+.content{padding:12px 14px 90px}
+.card{background:#0c0c1e;border:1px solid #151530;border-radius:14px;padding:14px;margin-bottom:10px}
+.lbl{font-size:9px;color:#333360;letter-spacing:2px;margin-bottom:3px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#0c0c1e;border-top:1px solid #151530;display:flex;padding:8px 0 16px}
+.nav-btn{flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:#333360;font-family:inherit}
+.nav-btn.on{color:#7799ff}
+.toast{position:fixed;top:68px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:22px;font-size:12px;font-weight:700;z-index:200;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,.7)}
+.tog{width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;transition:background .3s;flex-shrink:0;outline:none}
+.tog-k{position:absolute;top:4px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .25s;pointer-events:none}
+.prog{height:3px;background:#151530;border-radius:2px;overflow:hidden;margin-top:8px}
+.prog-f{height:100%;border-radius:2px;transition:width 1s linear}
+.tbl{width:100%;border-collapse:collapse;font-size:10px}
+.tbl th{color:#333360;font-size:8px;letter-spacing:1px;padding:6px 4px;text-align:left;border-bottom:1px solid #151530}
+.tbl td{padding:7px 4px;border-bottom:1px solid #0a0a15;vertical-align:middle}
+.ubadge{font-size:8px;padding:2px 7px;border-radius:8px;background:rgba(0,230,118,.15);color:#00e676;font-weight:700;white-space:nowrap}
+.dbadge{font-size:8px;padding:2px 7px;border-radius:8px;background:rgba(255,23,68,.15);color:#ff1744;font-weight:700;white-space:nowrap}
+.tab-btn{padding:5px 10px;border-radius:16px;border:1px solid #151530;background:transparent;color:#333360;font-family:inherit;font-size:9px;cursor:pointer;letter-spacing:1px}
+.tab-btn.on{border-color:#3355ff;background:rgba(51,85,255,.15);color:#7799ff}
+input[type=range]{width:100%;accent-color:#3355ff}
+.mart-tog{padding:8px 18px;border-radius:10px;border:2px solid #151530;background:transparent;color:#333360;font-family:inherit;font-size:12px;cursor:pointer;font-weight:800;transition:all .2s;letter-spacing:1px}
+.mart-tog.on{border-color:#ffd740;background:rgba(255,215,64,.15);color:#ffd740}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- SYNC BAR -->
+<div class="sync-bar" id="sync-bar">
+  ⏱️ NEXT CANDLE IN &nbsp;<span id="sync-cd" style="font-weight:800;font-size:13px">--:--</span>&nbsp; · &nbsp;TRADE EXPIRES AT CANDLE CLOSE
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div style="font-size:9px;color:#333360;letter-spacing:3px">⚡ BTC AUTOTRADER</div>
+    <div id="hp" style="font-size:14px;font-weight:800;color:#888">Loading...</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:3px">
+      <div id="live-clock" style="font-size:9px;color:#333360;letter-spacing:1px">--:--:--</div>
+      <div id="candle-bar-wrap" style="width:60px;height:4px;background:#151530;border-radius:2px;overflow:hidden">
+        <div id="candle-bar" style="height:100%;width:0%;background:#3355ff;transition:width 1s linear"></div>
+      </div>
+      <div id="next-candle" style="font-size:9px;color:#333360">--s</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="text-align:right">
+      <div class="lbl">BALANCE</div>
+      <div id="hb" style="font-size:14px;font-weight:800;color:#00e676">$1000.00</div>
+    </div>
+    <div style="text-align:center">
+      <div class="lbl" style="margin-bottom:5px">BOT</div>
+      <button class="tog" id="bot-tog" onclick="toggleBot()" style="background:#1a1a3a">
+        <div class="tog-k" id="bot-knob" style="left:4px"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="content" id="content"></div>
+
+<!-- NAV -->
+<div class="nav">
+  <button class="nav-btn on" onclick="go('dash')" id="n-dash"><span style="font-size:18px">📡</span><span style="font-size:7px;letter-spacing:1px">LIVE</span></button>
+  <button class="nav-btn" onclick="go('perf')" id="n-perf"><span style="font-size:18px">📈</span><span style="font-size:7px;letter-spacing:1px">PERF</span></button>
+  <button class="nav-btn" onclick="go('bot')" id="n-bot"><span style="font-size:18px">🤖</span><span style="font-size:7px;letter-spacing:1px">BOT</span></button>
+  <button class="nav-btn" onclick="go('log')" id="n-log"><span style="font-size:18px">📋</span><span style="font-size:7px;letter-spacing:1px">LOG</span></button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  PERSISTENCE
+// ─────────────────────────────────────────────────────────────
+const KEY = 'btc_at_v3';
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ return null; } }
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify({
+      bal:S.bal, startBal:S.startBal, trades:S.trades,
+      active5:S.active5, active15:S.active15,
+      cfg:S.cfg, apiKey:S.apiKey,
+      cycles:S.cycles,
+      mart:S.mart,
+      log:S.log.slice(0,50),
+      savedAt:Date.now()
+    }));
+  }catch(e){}
+}
+
+const D = load();
+
+// ─────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────
+const S = {
+  // live — always fresh
+  price:null, chg:0, c5:[], c15:[], p5:null, p15:null,
+  screen:'dash', t5:0, t15:0,
+  think5:false, think15:false, ai5:'', ai15:'',
+  botOn:false,
+  syncing:false,        // waiting for first candle boundary after bot ON
+  syncTarget:0,         // next 5m boundary timestamp (clock-based)
+  last5mBound:0,
+  last15mBound:0,
+  last5mSlot:   '',
+  last15mSlot:  '',
+  thinking5:    false,
+  thinking15:   false,
+
+  // persisted
+  bal:        D?.bal        ?? 1000,
+  startBal:   D?.startBal   ?? 1000,
+  trades:     D?.trades     ?? [],
+  active5:    D?.active5    ?? null,
+  active15:   D?.active15   ?? null,
+  cfg:        D?.cfg        ?? { s5:10, s15:10, minConf:65 },
+  apiKey:     D?.apiKey     ?? '',
+  cycles:     D?.cycles     ?? 0,
+  log:        D?.log        ?? [],
+  period:     'today',
+  perfTF:     'all',
+
+  // martingale (persisted inside mart object)
+  mart: D?.mart ?? {
+    on:false,
+    base5:10, base15:10,       // original base stake
+    mult5:1,  mult15:1,        // current multiplier
+    loss5:0,  loss15:0,        // consecutive losses
+    maxBet:180                 // cap
+  }
+};
+
+if(D){
+  const age = Math.round((Date.now()-(D.savedAt||0))/60000);
+  S.log.unshift({msg:'♻️ Restored: '+S.trades.length+' trades ('+age+'m ago)',type:'ok',ts:Date.now()});
+}
+
+// ─────────────────────────────────────────────────────────────
+//  INDICATORS
+// ─────────────────────────────────────────────────────────────
+function ema(d,p){
+  if(d.length<p)return[d[d.length-1]||0];
+  const k=2/(p+1);let e=d.slice(0,p).reduce((a,b)=>a+b,0)/p;const r=[e];
+  for(let i=p;i<d.length;i++){e=d[i]*k+e*(1-k);r.push(e);}return r;
+}
+function rsiF(c,p=14){
+  if(c.length<p+1)return 50;let g=0,l=0;
+  for(let i=1;i<=p;i++){const d=c[i]-c[i-1];d>0?g+=d:l-=d;}
+  let ag=g/p,al=l/p;
+  for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1];ag=(ag*(p-1)+Math.max(d,0))/p;al=(al*(p-1)+Math.max(-d,0))/p;}
+  return al===0?100:100-100/(1+ag/al);
+}
+function macdF(c){
+  if(c.length<26)return{h:0,m:0};
+  const e12=ema(c,12),e26=ema(c,26),off=e12.length-e26.length;
+  const ml=e26.map((v,i)=>e12[i+off]-v),sl=ema(ml,9);
+  return{h:ml[ml.length-1]-sl[sl.length-1],m:ml[ml.length-1]};
+}
+function bbF(c,p=20){
+  if(c.length<p)return{pct:.5};
+  const s=c.slice(-p),m=s.reduce((a,b)=>a+b)/p;
+  const std=Math.sqrt(s.reduce((a,b)=>a+(b-m)**2)/p);
+  return{pct:(c[c.length-1]-(m-2*std))/(4*std||1)};
+}
+function atrF(h,l,c,p=14){
+  if(c.length<2)return 500;const t=[];
+  for(let i=1;i<c.length;i++)t.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));
+  return t.slice(-p).reduce((a,b)=>a+b,0)/Math.min(p,t.length);
+}
+function stF(h,l,c,p=14){
+  if(c.length<p)return{k:50};
+  const sh=h.slice(-p),sl=l.slice(-p);
+  return{k:((c[c.length-1]-Math.min(...sl))/(Math.max(...sh)-Math.min(...sl)||1))*100};
+}
+
+function buildSig(candles,tf){
+  if(!candles||candles.length<30)return null;
+  const cls=candles.map(c=>c.close),h=candles.map(c=>c.high),l=candles.map(c=>c.low),vol=candles.map(c=>c.volume);
+  const rsi=rsiF(cls),macd=macdF(cls),bb=bbF(cls),st=stF(h,l,cls);
+  const e9=ema(cls,9),e21=ema(cls,21),e50=ema(cls,50);
+  const last=cls[cls.length-1],le9=e9[e9.length-1],le21=e21[e21.length-1],le50=e50.length?e50[e50.length-1]:last;
+  const mom=(last-cls[cls.length-4])/cls[cls.length-4]*100;
+  const vr=(vol.slice(-5).reduce((a,b)=>a+b,0)/5)/(vol.slice(-20).reduce((a,b)=>a+b,0)/20||1);
+  let up=0,dn=0;
+  if(rsi<28)up+=1.4;else if(rsi<38)up+=.7;else if(rsi>72)dn+=1.4;else if(rsi>62)dn+=.7;
+  if(macd.h>0&&macd.m>0)up+=1.0;else if(macd.h<0&&macd.m<0)dn+=1.0;else{macd.h>0?up+=.3:dn+=.3;}
+  if(bb.pct<.08)up+=1.0;else if(bb.pct>.92)dn+=1.0;else if(bb.pct<.3)up+=.5;else if(bb.pct>.7)dn+=.5;
+  if(last>le9&&le9>le21&&le21>le50)up+=1.1;else if(last<le9&&le9<le21&&le21<le50)dn+=1.1;else if(last>le21)up+=.4;else dn+=.4;
+  if(st.k<18)up+=.8;else if(st.k>82)dn+=.8;
+  if(mom>.4)up+=.8;else if(mom<-.4)dn+=.8;else if(mom>.1)up+=.3;else if(mom<-.1)dn+=.3;
+  if(vr>1.8){mom>0?up+=.6:dn+=.6;}
+  const net=(up-dn)/(up+dn||1);
+  const dir=net>.07?'UP':net<-.07?'DOWN':'NEUTRAL';
+  const conf=Math.min(95,Math.round((Math.abs(net)*70+42)*(tf==='15m'?.92:1)));
+  return{dir,conf,rsi:rsi.toFixed(1),mh:macd.h.toFixed(3),bb:(bb.pct*100).toFixed(0),stk:st.k.toFixed(0),atr:atrF(h,l,cls).toFixed(0),mom:mom.toFixed(3),vr:vr.toFixed(2),price:last,tf,up:up.toFixed(2),dn:dn.toFixed(2),e9:le9,e21:le21};
+}
+
+// ─────────────────────────────────────────────────────────────
+//  AI DECISION
+// ─────────────────────────────────────────────────────────────
+async function aiDecide(s){
+  if(!S.apiKey)return localDecide(s);
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,
+        messages:[{role:'user',content:'BTC '+s.tf+'. Price:$'+fmt(s.price)+' RSI:'+s.rsi+' MACD:'+s.mh+' BB:'+s.bb+'% Stoch:'+s.stk+' Mom:'+s.mom+'% Vol:'+s.vr+'x Score:'+s.up+'bull/'+s.dn+'bear Sys:'+s.dir+'@'+s.conf+'%. JSON only:{\"decision\":\"TRADE\",\"direction\":\"UP\",\"confidence\":78,\"reasoning\":\"max 12 words\",\"risk\":\"LOW\"}'}]
+      })
+    });
+    const d=await r.json();const t=d.content?.[0]?.text||'{}';
+    return JSON.parse(t.match(/\{[\s\S]*\}/)?.[0]||'{}');
+  }catch(e){return localDecide(s);}
+}
+function localDecide(s){
+  // ALWAYS trade — just pick the stronger direction
+  // Break-even is 53.4% at 88% payout, target 60%+
+  const dir = +s.up >= +s.dn ? 'UP' : 'DOWN';
+  const strength = Math.abs(+s.up - +s.dn);
+  const risk = strength>1.5?'LOW':strength>0.8?'MEDIUM':'HIGH';
+  const reason = dir==='UP'
+    ? 'Bull score '+s.up+' vs Bear '+s.dn+' — taking UP'
+    : 'Bear score '+s.dn+' vs Bull '+s.up+' — taking DOWN';
+  return{decision:'TRADE', direction:dir, confidence:s.conf, reasoning:reason, risk};
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CANDLE TIME HELPERS
+// ─────────────────────────────────────────────────────────────
+// Returns the START of the current 5m candle (floor to 5m boundary)
+function cur5mStart(){ return Math.floor(Date.now()/300000)*300000; }
+function cur15mStart(){ return Math.floor(Date.now()/900000)*900000; }
+// End of current candle
+function cur5mEnd(){ return cur5mStart()+300000; }
+function cur15mEnd(){ return cur15mStart()+900000; }
+// Seconds until next 5m boundary
+function secsToNext5m(){ return Math.ceil((cur5mEnd()-Date.now())/1000); }
+function secsToNext15m(){ return Math.ceil((cur15mEnd()-Date.now())/1000); }
+
+// ─────────────────────────────────────────────────────────────
+//  BOT TOGGLE — waits for next candle boundary before trading
+// ─────────────────────────────────────────────────────────────
+function toggleBot(){
+  S.botOn = !S.botOn;
+  const tog  = document.getElementById('bot-tog');
+  const knob = document.getElementById('bot-knob');
+
+  if(S.botOn){
+    tog.style.background = '#00c853';
+    knob.style.left = '28px';
+    // Record current candle slots so we don't retrade them
+    // BUT fire immediately if we are within first 30s of a candle
+    const now = Date.now();
+    const elapsed5  = now % 300000;   // ms into current 5m candle
+    const elapsed15 = now % 900000;   // ms into current 15m candle
+    S.last5mSlot  = get5mSlot();
+    S.last15mSlot = get15mSlot();
+    addLog('🤖 Bot ON — next 5m trade in '+(Math.ceil((300000-elapsed5)/1000))+'s · 15m in '+(Math.ceil((900000-elapsed15)/1000))+'s','ok');
+    showToast('🤖 Bot ON!','bot');
+    // If we just entered a fresh candle (within 30s), trade immediately
+    if(elapsed5 < 30000){ S.last5mSlot=''; setTimeout(()=>fireBot5(),200); }
+    if(elapsed15 < 30000){ S.last15mSlot=''; setTimeout(()=>fireBot15(),400); }
+  } else {
+    tog.style.background = '#1a1a3a';
+    knob.style.left = '4px';
+    document.getElementById('sync-bar').style.display='none';
+    addLog('⏸️ Bot OFF','info');
+    showToast('⏸️ Bot paused','info');
+  }
+  render();
+}
+
+// Slot IDs — unique string per candle slot, changes every 5m/15m
+function get5mSlot(){
+  const d=new Date();
+  return d.getUTCFullYear()+'-'+d.getUTCMonth()+'-'+d.getUTCDate()+'-'+d.getUTCHours()+'-'+Math.floor(d.getUTCMinutes()/5);
+}
+function get15mSlot(){
+  const d=new Date();
+  return d.getUTCFullYear()+'-'+d.getUTCMonth()+'-'+d.getUTCDate()+'-'+d.getUTCHours()+'-'+Math.floor(d.getUTCMinutes()/15);
+}
+
+async function fireBot5(){
+  const slot=get5mSlot();
+  if(S.last5mSlot===slot){ addLog('⏭️ 5m already traded slot '+slot,'skip'); return; }
+  if(S.thinking5){ addLog('⏭️ 5m AI busy','skip'); return; }
+  S.last5mSlot=slot;
+  addLog('🕐 5m slot '+slot,'info');
+  if(S.active5) resolveTrade('active5','t5');
+  await bot5();
+}
+
+async function fireBot15(){
+  const slot=get15mSlot();
+  if(S.last15mSlot===slot){ addLog('⏭️ 15m already traded slot '+slot,'skip'); return; }
+  if(S.thinking15){ addLog('⏭️ 15m AI busy','skip'); return; }
+  S.last15mSlot=slot;
+  addLog('🕐 15m slot '+slot,'info');
+  if(S.active15) resolveTrade('active15','t15');
+  await bot15();
+}
+// ─────────────────────────────────────────────────────────────
+//  TRADE PLACEMENT
+// ─────────────────────────────────────────────────────────────
+async function bot5(){
+  if(!S.botOn||S.syncing||S.active5||S.thinking5)return;
+  S.thinking5=true;
+
+  const s=buildSig(S.c5,'5m');
+  if(!s){addLog('⚠️ 5m: no data','warn');return;}
+  addLog('🔍 5m ['+fmtIST(Date.now())+']: '+s.dir+' '+s.conf+'%','data');
+  S.think5=true;render();
+  const ai=await aiDecide(s);S.ai5=ai.reasoning||'';S.think5=false;
+  addLog('🤖 5m AI: '+ai.decision+' '+(ai.direction||'')+' '+(ai.confidence||0)+'% ['+ai.risk+']','ai');
+  if(ai.decision==='TRADE'&&S.bal>=S.cfg.s5){
+    const dir=ai.direction||s.dir;if(dir==='NEUTRAL')return;
+    // Expire at END of current 5m candle (from real clock)
+    const expiry = cur5mEnd();
+    const stake  = S.cfg.s5;
+    S.active5={id:Date.now(),dir,tf:'5m',amt:stake,entry:S.price,
+               exp:expiry,mult:.88,aiConf:ai.confidence,risk:ai.risk,
+               reason:ai.reasoning,at:Date.now(),martMult:S.mart.mult5};
+    S.bal=+(S.bal-stake).toFixed(2);
+    S.t5=Math.ceil((expiry-Date.now())/1000);
+    addLog('✅ 5m PLACED: '+dir+' $'+stake+' @ $'+fmt(S.price)+' expires '+fmtIST(expiry),'trade');
+    showToast('🤖 5m: $'+stake+' '+dir,'bot');
+    save();
+  }else{addLog('⏭️ 5m SKIP: insufficient balance $'+S.bal.toFixed(2),'skip');S.thinking5=false;}
+  render();
+}
+
+async function bot15(){
+  if(!S.botOn||S.syncing||S.active15||S.thinking15)return;
+  S.thinking15=true;
+
+  const s=buildSig(S.c15,'15m');
+  if(!s){addLog('⚠️ 15m: no data','warn');return;}
+  addLog('🔍 15m ['+fmtIST(Date.now())+']: '+s.dir+' '+s.conf+'%','data');
+  S.think15=true;render();
+  const ai=await aiDecide(s);S.ai15=ai.reasoning||'';S.think15=false;
+  addLog('🤖 15m AI: '+ai.decision+' '+(ai.direction||'')+' '+(ai.confidence||0)+'% ['+ai.risk+']','ai');
+  if(ai.decision==='TRADE'&&S.bal>=S.cfg.s15){
+    const dir=ai.direction||s.dir;if(dir==='NEUTRAL')return;
+    const expiry = cur15mEnd();
+    const stake  = S.cfg.s15;
+    S.active15={id:Date.now(),dir,tf:'15m',amt:stake,entry:S.price,
+                exp:expiry,mult:.85,aiConf:ai.confidence,risk:ai.risk,
+                reason:ai.reasoning,at:Date.now(),martMult:S.mart.mult15};
+    S.bal=+(S.bal-stake).toFixed(2);
+    S.t15=Math.ceil((expiry-Date.now())/1000);
+    addLog('✅ 15m PLACED: '+dir+' $'+stake+' @ $'+fmt(S.price)+' expires '+fmtIST(expiry),'trade');
+    showToast('🤖 15m: $'+stake+' '+dir,'bot');
+    save();
+  }else{addLog('⏭️ 15m SKIP: insufficient balance $'+S.bal.toFixed(2),'skip');}
+  render();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RESOLVE TRADE + MARTINGALE
+// ─────────────────────────────────────────────────────────────
+function resolveTrade(key, tkey){
+  const a=S[key];if(!a)return; // always resolve when called from candle boundary
+  const cur=S.price;
+  const won=(a.dir==='UP'&&cur>a.entry)||(a.dir==='DOWN'&&cur<a.entry);
+  // WIN: return stake + profit. LOSS: stake already deducted on placement, just return 0
+  const pnl=won?+(a.amt+a.amt*a.mult).toFixed(2):0;
+  const diff=((cur-a.entry)/a.entry*100);
+  S.bal=+(S.bal+pnl).toFixed(2);
+  S.trades.unshift({...a,exit:cur,won,pnl,diff:diff.toFixed(3),closedAt:Date.now()});
+  S[key]=null;S[tkey]=0;
+
+  // ── MARTINGALE ──────────────────────────────────────
+  const is5  = a.tf==='5m';
+  const mk   = is5?'mult5':'mult15';
+  const lk   = is5?'loss5':'loss15';
+  const bk   = is5?'base5':'base15';
+  const sk   = is5?'s5':'s15';
+
+  // ── TRACK CONSECUTIVE LOSSES (always, even when martingale is off) ──
+  if(!won){
+    S.mart[lk]++;
+    // AUTO-ACTIVATE martingale after 1 loss
+    if(!S.mart.on && S.mart[lk]>=1){
+      S.mart.on   = true;
+      S.mart[bk]  = S.cfg[sk];   // save current stake as base
+      addLog('🎲 AUTO-MARTINGALE ON — '+S.mart[lk]+' consecutive losses on '+a.tf,'warn');
+      showToast('🎲 Martingale AUTO-ON after 2 losses!','info');
+    }
+  }else{
+    S.mart[lk] = 0;   // reset loss counter on win
+  }
+
+  if(S.mart.on){
+    if(won){
+      const hadLosses = S.mart[lk+1]>0 || S.mart[mk]>1;  // was doubling
+      if(hadLosses||S.mart[mk]>1) addLog(a.tf+' ✅ WIN — Martingale reset to base $'+S.mart[bk],'ok');
+      S.cfg[sk]  = S.mart[bk];
+      S.mart[mk] = 1;
+      // Keep martingale ON — it stays on once activated until manually turned off
+      showToast('+$'+pnl.toFixed(2)+' WIN '+a.tf+'! Reset to $'+S.mart[bk]+' 🎉','win');
+    }else{
+      const nextAmt = Math.min(a.amt*2, S.mart.maxBet);
+      if(S.bal>=nextAmt){
+        S.mart[mk] = nextAmt/S.mart[bk];
+        S.cfg[sk]  = nextAmt;
+        addLog('📈 Martingale '+a.tf+': loss #'+S.mart[lk]+' → next $'+nextAmt,'warn');
+        showToast('-$'+a.amt+' LOSS · Next bet: $'+nextAmt,'loss');
+      }else{
+        S.cfg[sk]  = S.mart[bk];
+        S.mart[mk] = 1;
+        addLog('⚠️ Martingale '+a.tf+': balance too low — reset to $'+S.mart[bk],'warn');
+        showToast('-$'+a.amt+' LOSS · Balance too low, reset','loss');
+      }
+    }
+  }else{
+    addLog((won?'🏆':'💸')+' '+a.tf+' '+(won?'WIN':'LOSS')+': '+(won?'+':'')+pnl.toFixed(2),'result');
+    showToast(won?'+$'+pnl.toFixed(2)+' WIN '+a.tf+'! 🎉':'-$'+a.amt+' LOSS '+a.tf,won?'win':'loss');
+  }
+  save();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FETCH DATA
+// ─────────────────────────────────────────────────────────────
+async function fetchData(){
+  try{
+    const[tk,k5,k15]=await Promise.all([
+      fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT').then(r=>r.json()),
+      fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=100').then(r=>r.json()),
+      fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=100').then(r=>r.json()),
+    ]);
+    const p=raw=>raw.map(c=>({time:+c[0],open:+c[1],high:+c[2],low:+c[3],close:+c[4],volume:+c[5]}));
+    S.c5=p(k5);S.c15=p(k15);
+    S.price=+tk.lastPrice;S.chg=+tk.priceChangePercent;
+    S.p5=buildSig(S.c5,'5m');S.p15=buildSig(S.c15,'15m');
+    resolveTrade('active5','t5');
+    resolveTrade('active15','t15');
+    // Bot cycle handled by 1s timer
+    render();
+  }catch(e){render();}
+}
+
+// ─────────────────────────────────────────────────────────────
+//  1-SECOND TIMER — all time-sensitive logic here
+// ─────────────────────────────────────────────────────────────
+setInterval(()=>{
+  const now = Date.now();
+
+  // ── LIVE CLOCK ──────────────────────────────────────────────
+  const clockEl = document.getElementById('live-clock');
+  const barEl   = document.getElementById('candle-bar');
+  const nextEl  = document.getElementById('next-candle');
+  if(clockEl) clockEl.textContent = new Date(now).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  if(barEl){
+    const pct = Math.round((now%300000)/300000*100);
+    barEl.style.width = pct+'%';
+    barEl.style.background = pct<5?'#00e676':pct>90?'#ffd740':'#3355ff';
+  }
+  if(nextEl){
+    const sl = Math.ceil((cur5mEnd()-now)/1000);
+    nextEl.textContent = sl+'s';
+    nextEl.style.color = sl<15?'#ff1744':sl<30?'#ffd740':'#333360';
+  }
+
+  // ── TRADE COUNTDOWN ────────────────────────────────────────
+  if(S.active5){
+    S.t5=Math.max(0,Math.ceil((S.active5.exp-now)/1000));
+    if(S.t5===0){ fetchData(); }
+  }
+  if(S.active15){
+    S.t15=Math.max(0,Math.ceil((S.active15.exp-now)/1000));
+    if(S.t15===0){ fetchData(); }
+  }
+
+  // ── CANDLE SLOT DETECTION (fires bot on new slot) ─────────
+  if(S.botOn){
+    const slot5  = get5mSlot();
+    const slot15 = get15mSlot();
+
+    // New 5m slot?
+    if(slot5 !== S.last5mSlot){
+      fireBot5();  // fireBot5 will set last5mSlot=slot5 to prevent re-fire
+    }
+    // New 15m slot?
+    if(slot15 !== S.last15mSlot){
+      fireBot15();
+    }
+  }
+
+  if(S.screen==='dash') renderCountdowns();
+}, 1000);
+
+// ─────────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────────
+// TRUE balance = startBal + all closed PnL - stakes currently in open trades
+function trueBalance(){
+  const closed = S.trades.reduce((a,t)=>a+t.pnl, 0);
+  const open   = (S.active5?S.active5.amt:0)+(S.active15?S.active15.amt:0);
+  return +(S.startBal + closed - open).toFixed(2);
+}
+
+const dc  = d=>d==='UP'?'#00e676':d==='DOWN'?'#ff1744':'#ffd740';
+const db  = d=>d==='UP'?'rgba(0,230,118,.1)':d==='DOWN'?'rgba(255,23,68,.1)':'rgba(255,215,64,.1)';
+const fmt = n=>n?n.toLocaleString(undefined,{maximumFractionDigits:0}):'—';
+const fmtIST = ts=>new Date(ts).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true});
+
+function showToast(msg,type='info'){
+  let t=document.querySelector('.toast');if(t)t.remove();
+  t=document.createElement('div');t.className='toast';t.textContent=msg;
+  t.style.background=type==='win'?'#00c853':type==='loss'?'#d50000':type==='bot'?'#1565c0':type==='ok'?'#0d47a1':'#1a1a44';
+  t.style.color='#fff';document.body.appendChild(t);
+  setTimeout(()=>{if(t.parentNode)t.remove();},3500);
+}
+function addLog(msg,type='info'){S.log.unshift({msg,type,ts:Date.now(),price:S.price});if(S.log.length>150)S.log.pop();}
+function go(s){S.screen=s;['dash','perf','bot','log'].forEach(x=>document.getElementById('n-'+x).classList.toggle('on',x===s));render();}
+function spark(data,color,W=100,H=28){
+  if(!data||data.length<2)return'';
+  const v=data.slice(-40).map(c=>c.close),mn=Math.min(...v),mx=Math.max(...v),rng=mx-mn||1;
+  const pts=v.map((val,i)=>`${(i/(v.length-1))*W},${H-((val-mn)/rng)*H}`).join(' ');
+  return'<svg width="'+W+'" height="'+H+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function toggleMartingale(){
+  S.mart.on = !S.mart.on;
+  if(!S.mart.on){
+    S.mart.mult5=1;S.mart.mult15=1;
+    S.mart.loss5=0;S.mart.loss15=0;
+    S.cfg.s5=S.mart.base5;S.cfg.s15=S.mart.base15;
+  }
+  addLog(S.mart.on?'🎲 Martingale ON — doubles on loss, cap $'+S.mart.maxBet:'🎲 Martingale OFF','info');
+  showToast(S.mart.on?'🎲 Martingale ON!':'Martingale OFF','info');
+  save();render();
+}
+
+function applyMode(m){
+  if(m==='conservative'){S.cfg.minConf=75;}
+  else if(m==='balanced'){S.cfg.minConf=65;}
+  else{S.cfg.minConf=55;}
+  save();render();
+}
+
+function filterPeriod(trades){
+  const now=Date.now(),d=new Date();
+  if(S.period==='today'){const s=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();return trades.filter(t=>t.closedAt>=s);}
+  if(S.period==='yesterday'){const e=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();return trades.filter(t=>t.closedAt>=e-86400000&&t.closedAt<e);}
+  if(S.period==='weekly')return trades.filter(t=>t.closedAt>=now-7*86400000);
+  if(S.period==='month')return trades.filter(t=>t.closedAt>=now-30*86400000);
+  return trades;
+}
+function calcP(trades){
+  const inv    = trades.reduce((a,t)=>a+t.amt,0);
+  const wins   = trades.filter(t=>t.won).length;
+  const losses = trades.filter(t=>!t.won).length;
+  const earn   = trades.filter(t=>t.won).reduce((a,t)=>a+t.pnl,0);
+  const lost   = Math.abs(trades.filter(t=>!t.won).reduce((a,t)=>a+t.pnl,0));
+  const net    = trades.reduce((a,t)=>a+t.pnl,0);
+  const avgWin = wins>0?(earn/wins).toFixed(2):0;
+  const avgLoss= losses>0?(lost/losses).toFixed(2):0;
+  const inProgress = (S.active5?S.active5.amt:0)+(S.active15?S.active15.amt:0);
+  // True balance: start + net closed pnl - in-progress stakes
+  const truebal= S.startBal + net;
+  return{inv,earn,lost,net,wins,losses,avgWin,avgLoss,inProgress,truebal,
+    pct:inv>0?(net/inv*100).toFixed(1):0,
+    wr:trades.length?Math.round(wins/trades.length*100):0,
+    total:trades.length};
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER — COUNTDOWN ONLY (fast, no full re-render)
+// ─────────────────────────────────────────────────────────────
+function renderCountdowns(){
+  const e5=document.getElementById('td-t5');
+  const e15=document.getElementById('td-t15');
+  if(e5)  e5.textContent  = S.active5  ? S.t5+'s'  : '—';
+  if(e15) e15.textContent = S.active15 ? S.t15+'s' : '—';
+  const p5f=document.getElementById('prog-5');
+  const p15f=document.getElementById('prog-15');
+  if(p5f&&S.active5){
+    const dur=Math.round((S.active5.exp-S.active5.at)/1000);
+    p5f.style.width=Math.round((1-S.t5/dur)*100)+'%';
+  }
+  if(p15f&&S.active15){
+    const dur=Math.round((S.active15.exp-S.active15.at)/1000);
+    p15f.style.width=Math.round((1-S.t15/dur)*100)+'%';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SCREENS
+// ─────────────────────────────────────────────────────────────
+function renderDash(){
+  const a5=S.active5,a15=S.active15,p5=S.p5,p15=S.p15;
+  const restored=!!D&&D.trades?.length>0;
+  return (restored?'<div style="background:rgba(51,85,255,.1);border:1px solid rgba(51,85,255,.3);border-radius:12px;padding:8px 14px;margin-bottom:10px;font-size:10px;color:#7799ff">♻️ Session restored · '+S.trades.length+' trades · $'+S.bal.toFixed(2)+'</div>':'')+
+  // Price card
+  '<div class="card"><div class="row"><div><div class="lbl">BTC/USDT LIVE</div>'+
+  '<div style="font-size:26px;font-weight:800;color:#fff">'+(S.price?'$'+fmt(S.price):'Loading...')+'</div>'+
+  '<div style="font-size:12px;color:'+(S.chg>=0?'#00e676':'#ff1744')+';margin-top:2px">'+(S.chg>=0?'+':'')+S.chg.toFixed(2)+'% 24h</div></div>'+
+  '<div style="text-align:right">'+spark(S.c5,S.chg>=0?'#00e676':'#ff1744')+'<div style="font-size:8px;color:#333360;margin-top:2px">5m</div></div></div></div>'+
+
+  // Bot status
+  '<div class="card" style="background:'+(S.botOn?'rgba(0,200,83,.06)':'transparent')+';border-color:'+(S.botOn?'rgba(0,200,83,.25)':'#151530')+'">'+
+  '<div class="row"><div><div class="lbl">'+(S.botOn?'BOT ACTIVE':'BOT PAUSED')+'</div>'+
+  '<div style="font-size:12px;font-weight:700;color:'+(S.botOn?'#00c853':'#444466')+'">'+(S.syncing?'⏳ Waiting for next candle boundary...':S.botOn?'🤖 5m + 15m trading on candle boundaries':'Toggle BOT — trades every 5m candle')+'</div>'+
+  (S.think5||S.think15?'<div style="font-size:9px;color:#7799ff;margin-top:4px">⏳ AI analyzing '+(S.think5?'5m':'')+(S.think5&&S.think15?'+':'')+(S.think15?'15m':'')+'...</div>':'')+
+  '</div><div style="text-align:right"><div class="lbl">CYCLES</div><div style="font-size:18px;font-weight:800;color:#7799ff">'+S.cycles+'</div></div></div></div>'+
+
+  // Signals
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+  [[p5,'5m',S.ai5],[p15,'15m',S.ai15]].map(([p,tf,ai])=>p?
+    '<div class="card" style="background:'+db(p.dir)+';border-color:'+dc(p.dir)+'33;padding:12px">'+
+    '<div class="lbl">'+tf+' SIGNAL</div>'+
+    '<div style="font-size:16px;font-weight:800;color:'+dc(p.dir)+'">'+(p.dir==='UP'?'▲':p.dir==='DOWN'?'▼':'◆')+' '+p.dir+'</div>'+
+    '<div style="font-size:11px;font-weight:700;color:'+dc(p.dir)+'">'+p.conf+'% conf</div>'+
+    '<div style="font-size:8px;color:#333360;margin-top:3px">RSI '+p.rsi+' · BB '+p.bb+'%</div>'+
+    (ai?'<div style="font-size:8px;color:#888;margin-top:5px;line-height:1.5;border-top:1px solid #151530;padding-top:4px">'+ai+'</div>':'')+
+    '</div>':'<div class="card" style="padding:12px"><div class="lbl">'+tf+'</div><div style="color:#333360;font-size:10px;margin-top:4px">Loading...</div></div>'
+  ).join('')+'</div>'+
+
+  // Open trades table
+  '<div class="card"><div class="lbl" style="margin-bottom:10px">OPEN TRADES</div>'+
+  '<table class="tbl"><thead><tr><th>TF</th><th>BET</th><th>ENTRY</th><th>NOW</th><th>DIFF%</th><th>LEFT</th><th>STAKE</th><th>EST P&L</th></tr></thead><tbody>'+
+  [['5m',a5,'t5','prog-5'],['15m',a15,'t15','prog-15']].map(([tf,a,tid,pid])=>
+    '<tr><td style="color:#7799ff;font-weight:700">'+tf+'</td>'+
+    (a?
+      '<td><span class="'+(a.dir==='UP'?'ubadge':'dbadge')+'">'+(a.dir==='UP'?'▲ UP':'▼ DN')+'</span></td>'+
+      '<td>$'+fmt(a.entry)+'</td>'+
+      '<td style="color:'+(S.price>a.entry?'#00e676':'#ff1744')+'">$'+fmt(S.price)+'</td>'+
+      '<td style="color:'+(S.price>a.entry?'#00e676':'#ff1744')+'">'+((S.price-a.entry)/a.entry*100).toFixed(2)+'%</td>'+
+      '<td style="color:#ffd740" id="'+tid+'">'+S[tid.replace('t','t')]+'s</td>'+
+      '<td>$'+a.amt+'</td>'+
+      '<td style="font-weight:700;color:'+((a.dir==='UP'&&S.price>a.entry)||(a.dir==='DOWN'&&S.price<a.entry)?'#00e676':'#ff1744')+'">'+
+      (((a.dir==='UP'&&S.price>a.entry)||(a.dir==='DOWN'&&S.price<a.entry))?'+$'+(a.amt*a.mult).toFixed(2):'-$'+a.amt)+'</td>'
+      :'<td colspan="7" style="color:#222244;font-size:9px">No active '+tf+' trade'+(S.botOn?' — watching clock...':'')+'</td>')+
+    '</tr>'+
+    (a?'<tr><td colspan="8" style="padding:0 0 8px"><div class="prog"><div class="prog-f" id="'+pid+'" style="background:linear-gradient(90deg,#3355ff,'+dc(a.dir)+')"></div></div></td></tr>':'')
+  ).join('')+'</tbody></table></div>'+
+
+  // Indicators
+  (S.p5?'<div class="card"><div class="lbl" style="margin-bottom:8px">INDICATORS (5m)</div>'+
+  '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">'+
+  [['RSI',S.p5.rsi,+S.p5.rsi<30?'#00e676':+S.p5.rsi>70?'#ff1744':'#c0c0e0'],
+   ['MACD',S.p5.mh,+S.p5.mh>0?'#00e676':'#ff1744'],
+   ['BB%',S.p5.bb+'%',+S.p5.bb<25?'#00e676':+S.p5.bb>75?'#ff1744':'#c0c0e0'],
+   ['STOCH',S.p5.stk,+S.p5.stk<20?'#00e676':+S.p5.stk>80?'#ff1744':'#c0c0e0'],
+   ['MOM',S.p5.mom+'%',+S.p5.mom>0?'#00e676':'#ff1744'],
+   ['VOL',S.p5.vr+'x',+S.p5.vr>1.5?'#ffd740':'#c0c0e0']
+  ].map(([l,v,c])=>'<div style="background:#080814;border-radius:7px;padding:7px"><div class="lbl">'+l+'</div><div style="font-size:12px;font-weight:700;color:'+c+'">'+v+'</div></div>').join('')+
+  '</div></div>':'');
+}
+
+function renderPerf(){
+  const fil=filterPeriod(S.trades);
+  const pf=S.perfTF||'all';
+  const tfl=pf==='all'?fil:fil.filter(t=>t.tf===pf);
+  const p=calcP(tfl);
+  const p5=calcP(fil.filter(t=>t.tf==='5m'));
+  const p15=calcP(fil.filter(t=>t.tf==='15m'));
+  const inProg=(S.active5?S.active5.amt:0)+(S.active15?S.active15.amt:0);
+  const truebal=trueBalance().toFixed(2);
+  const h=[];
+
+  h.push('<div style="font-size:11px;color:#333360;letter-spacing:3px;margin-bottom:12px">PERFORMANCE</div>');
+
+  // Period tabs
+  h.push('<div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">');
+  h.push('<button class="tab-btn '+(S.period==='today'?'on':'')+'" onclick="S.period=\'today\';render()">TODAY</button>');
+  h.push('<button class="tab-btn '+(S.period==='yesterday'?'on':'')+'" onclick="S.period=\'yesterday\';render()">YESTERDAY</button>');
+  h.push('<button class="tab-btn '+(S.period==='weekly'?'on':'')+'" onclick="S.period=\'weekly\';render()">WEEKLY</button>');
+  h.push('<button class="tab-btn '+(S.period==='month'?'on':'')+'" onclick="S.period=\'month\';render()">MONTH</button>');
+  h.push('<button class="tab-btn '+(S.period==='all'?'on':'')+'" onclick="S.period=\'all\';render()">ALL</button>');
+  h.push('</div>');
+
+  // TF filter
+  h.push('<div style="display:flex;gap:5px;margin-bottom:12px">');
+  h.push('<button class="tab-btn '+((S.perfTF||'all')==='all'?'on':'')+'" onclick="S.perfTF=\'all\';render()">ALL TF</button>');
+  h.push('<button class="tab-btn '+((S.perfTF||'all')==='5m'?'on':'')+'" onclick="S.perfTF=\'5m\';render()">5m ONLY</button>');
+  h.push('<button class="tab-btn '+((S.perfTF||'all')==='15m'?'on':'')+'" onclick="S.perfTF=\'15m\';render()">15m ONLY</button>');
+  h.push('</div>');
+
+    // Balance breakdown
+  var balColor=parseFloat(truebal)>=S.startBal?'#00e676':'#ff1744';
+  var pnlColor=p.net>=0?'#00e676':'#ff1744';
+  h.push('<div class="card" style="margin-bottom:10px">');
+  h.push('<div class="lbl" style="margin-bottom:8px">BALANCE BREAKDOWN</div>');
+  h.push('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">');
+  h.push('<div style="background:#080814;border-radius:8px;padding:10px"><div class="lbl">OPENING BALANCE</div><div style="font-size:16px;font-weight:800;color:#7799ff">$'+S.startBal.toFixed(2)+'</div></div>');
+  h.push('<div style="background:#080814;border-radius:8px;padding:10px"><div class="lbl">CURRENT BALANCE</div><div style="font-size:16px;font-weight:800;color:'+balColor+'">$'+truebal+'</div></div>');
+  h.push('<div style="background:#080814;border-radius:8px;padding:10px"><div class="lbl">IN PROGRESS</div><div style="font-size:16px;font-weight:800;color:#ffd740">$'+inProg.toFixed(2)+'</div>');
+  h.push('<div style="font-size:8px;color:#333360">'+(S.active5?'5m:$'+S.active5.amt+' ':'')+''+(S.active15?'15m:$'+S.active15.amt:'')+'</div></div>');
+  h.push('<div style="background:#080814;border-radius:8px;padding:10px"><div class="lbl">OVERALL P&L</div>');
+  h.push('<div style="font-size:16px;font-weight:800;color:'+pnlColor+'">'+(p.net>=0?'+':'')+p.net.toFixed(2)+'</div>');
+  h.push('<div style="font-size:9px;color:'+pnlColor+'">'+p.pct+'%</div></div>');
+  h.push('</div></div>');
+
+  // Stats
+  h.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">');
+  var wrColor=p.wr>=54?'#00e676':p.wr>=45?'#ffd740':'#ff1744';
+  [['WIN RATE',p.wr+'%',wrColor],['COMPLETED',p.total,'#7799ff'],['WINS',p.wins,'#00e676'],['LOSSES',p.losses,'#ff1744']].forEach(function(x){
+    h.push('<div style="background:#0c0c1e;border:1px solid #151530;border-radius:10px;padding:10px 4px;text-align:center">');
+    h.push('<div class="lbl" style="font-size:7px">'+x[0]+'</div>');
+    h.push('<div style="font-size:18px;font-weight:800;color:'+x[2]+'">'+x[1]+'</div></div>');
+  });
+  h.push('</div>');
+
+  // Avg win/loss/invested
+  h.push('<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">');
+  [['AVG WIN','$'+p.avgWin,'#00e676'],['AVG LOSS','-$'+p.avgLoss,'#ff1744'],['INVESTED','$'+p.inv.toFixed(0),'#7799ff']].forEach(function(x){
+    h.push('<div style="background:#0c0c1e;border:1px solid #151530;border-radius:10px;padding:10px 4px;text-align:center">');
+    h.push('<div class="lbl" style="font-size:7px">'+x[0]+'</div>');
+    h.push('<div style="font-size:14px;font-weight:800;color:'+x[2]+'">'+x[1]+'</div></div>');
+  });
+  h.push('</div>');
+
+  // Win rate bar
+  h.push('<div class="card" style="margin-bottom:10px;padding:12px">');
+  h.push('<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:5px">');
+  h.push('<span style="color:#333360">Win Rate</span>');
+  h.push('<span style="color:'+wrColor+';font-weight:700">'+p.wr+'% '+(p.wr>=54?'PROFITABLE':'BELOW 54% BREAK-EVEN')+'</span></div>');
+  h.push('<div style="height:8px;background:#0a0a18;border-radius:4px;overflow:hidden">');
+  h.push('<div style="height:100%;width:'+p.wr+'%;background:'+wrColor+';transition:width .5s"></div></div>');
+  h.push('<div style="display:flex;justify-content:space-between;font-size:8px;color:#1a1a3a;margin-top:3px"><span>0%</span><span style="color:#555588">54% break-even</span><span>100%</span></div>');
+  h.push('</div>');
+
+  // 5m vs 15m split
+  h.push('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">');
+  [[p5,'5m'],[p15,'15m']].forEach(function(x){
+    var pd=x[0],tf=x[1];
+    var bc=pd.net>=0?'rgba(0,230,118,.2)':'rgba(255,23,68,.2)';
+    var wc=pd.wr>=54?'#00e676':'#ff1744';
+    var nc=pd.net>=0?'#00e676':'#ff1744';
+    h.push('<div class="card" style="padding:12px;border-color:'+bc+'">');
+    h.push('<div class="lbl">'+tf+' TRADES</div>');
+    h.push('<div style="font-size:18px;font-weight:800;color:#7799ff">'+pd.total+'</div>');
+    h.push('<div style="font-size:10px;color:'+wc+'">'+pd.wr+'% WR &nbsp; <span style="color:'+nc+'">'+(pd.net>=0?'+':'')+pd.net.toFixed(2)+'</span></div>');
+    h.push('<div style="font-size:9px;color:#333360;margin-top:2px">Avg W: $'+pd.avgWin+' · Avg L: $'+pd.avgLoss+'</div>');
+    h.push('</div>');
+  });
+  h.push('</div>');
+
+  // History
+  h.push('<div class="card"><div class="row" style="margin-bottom:8px"><div class="lbl">TRADE HISTORY ('+tfl.length+')</div></div>');
+  if(tfl.length===0){
+    h.push('<div style="text-align:center;color:#333360;padding:16px;font-size:11px">No trades for this filter</div>');
+  }else{
+    h.push('<div style="overflow-x:auto"><table class="tbl" style="min-width:480px">');
+    h.push('<thead><tr><th>TIME IST</th><th>TF</th><th>BET</th><th>ENTRY</th><th>EXIT</th><th>DIFF%</th><th>STAKE</th><th>EARN</th><th>LOSS</th></tr></thead><tbody>');
+    tfl.slice(0,60).forEach(function(t){
+      var dc=+t.diff>=0?'#00e676':'#ff1744';
+      h.push('<tr>');
+      h.push('<td style="color:#555588;white-space:nowrap">'+fmtIST(t.closedAt)+'</td>');
+      h.push('<td><span style="color:#7799ff;font-weight:700">'+t.tf+'</span></td>');
+      h.push('<td><span class="'+(t.dir==='UP'?'ubadge':'dbadge')+'">'+(t.dir==='UP'?'▲ UP':'▼ DN')+'</span></td>');
+      h.push('<td>$'+fmt(t.entry)+'</td>');
+      h.push('<td>$'+fmt(t.exit)+'</td>');
+      h.push('<td style="color:'+dc+'">'+(+t.diff>=0?'+':'')+t.diff+'%</td>');
+      h.push('<td>$'+t.amt+'</td>');
+      h.push('<td style="color:#00e676;font-weight:700">'+(t.won?'+$'+t.pnl.toFixed(2):'—')+'</td>');
+      h.push('<td style="color:#ff1744;font-weight:700">'+(!t.won?'-$'+t.amt:'—')+'</td>');
+      h.push('</tr>');
+    });
+    h.push('</tbody></table></div>');
+  }
+  h.push('</div>');
+  return h.join('');
+}
+function renderBot(){
+  const m=S.mart;
+  return '<div style="font-size:11px;color:#333360;letter-spacing:3px;margin-bottom:14px">BOT CONFIG</div>'+
+
+  // API Key
+  '<div class="card">'+
+  '<div class="lbl" style="margin-bottom:6px">CLAUDE API KEY (optional)</div>'+
+  '<input type="password" placeholder="sk-ant-..." value="'+S.apiKey+'" '+
+  'style="width:100%;background:#080814;border:1px solid #151530;border-radius:8px;padding:10px;color:#c0c0e0;font-family:inherit;font-size:11px" '+
+  'oninput="S.apiKey=this.value;save()">'+
+  '<div style="font-size:9px;color:#333360;margin-top:5px">No key = local TA. With key = Claude AI analyses every trade.</div></div>'+
+
+  // Stakes
+  '<div class="card">'+
+  '<div class="row" style="margin-bottom:6px"><div class="lbl">5m STAKE</div><div style="font-size:15px;font-weight:800;color:#00e676">$'+S.cfg.s5+'</div></div>'+
+  '<input type="range" min="5" max="200" step="5" value="'+S.cfg.s5+'" oninput="S.cfg.s5=+this.value;S.mart.base5=+this.value;save();render()">'+
+  '<div class="row" style="margin-bottom:6px;margin-top:12px"><div class="lbl">15m STAKE</div><div style="font-size:15px;font-weight:800;color:#7799ff">$'+S.cfg.s15+'</div></div>'+
+  '<input type="range" min="5" max="200" step="5" value="'+S.cfg.s15+'" oninput="S.cfg.s15=+this.value;S.mart.base15=+this.value;save();render()"></div>'+
+
+  // Min confidence
+  '<div class="card">'+
+  '<div class="row" style="margin-bottom:6px"><div class="lbl">MIN CONFIDENCE</div><div style="font-size:15px;font-weight:800;color:#ffd740">'+S.cfg.minConf+'%</div></div>'+
+  '<input type="range" min="50" max="90" step="5" value="'+S.cfg.minConf+'" oninput="S.cfg.minConf=+this.value;save();render()">'+
+  '<div style="display:flex;justify-content:space-between;font-size:9px;color:#333360;margin-top:3px"><span>Bot trades EVERY candle</span><span>direction by score</span></div></div>'+
+
+  // Mode
+  '<div class="card">'+
+  '<div class="lbl" style="margin-bottom:8px">MODE</div>'+
+  '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+
+  [['conservative','🛡️','75% conf'],['balanced','⚖️','65% conf'],['aggressive','⚡','55% conf']].map(([mode,ic,desc])=>
+    '<button onclick="applyMode(\''+mode+'\')" style="padding:10px 4px;border-radius:10px;border:1px solid '+(S.cfg.minConf===(mode==='conservative'?75:mode==='balanced'?65:55)?'#3355ff':'#151530')+';background:'+(S.cfg.minConf===(mode==='conservative'?75:mode==='balanced'?65:55)?'rgba(51,85,255,.15)':'transparent')+';color:'+(S.cfg.minConf===(mode==='conservative'?75:mode==='balanced'?65:55)?'#7799ff':'#333360')+';font-family:inherit;cursor:pointer;font-size:9px;text-align:center">'+
+    '<div style="font-size:15px">'+ic+'</div><div style="font-weight:700">'+mode+'</div><div>'+desc+'</div></button>'
+  ).join('')+'</div></div>'+
+
+  // ── MARTINGALE ──────────────────────────────────────────────
+  '<div class="card" style="border-color:'+(m.on?'rgba(255,215,64,.4)':'#151530')+';background:'+(m.on?'rgba(255,215,64,.05)':'transparent')+'">'+
+  '<div class="row" style="margin-bottom:10px">'+
+  '<div><div class="lbl">MARTINGALE STRATEGY</div>'+
+  '<div style="font-size:11px;font-weight:700;color:'+(m.on?'#ffd740':'#555588')+'">'+(m.on?'🎲 ACTIVE — doubling on each loss':'Off — fixed stake mode')+'</div></div>'+
+  '<button class="mart-tog '+(m.on?'on':'')+'" onclick="toggleMartingale()">'+(m.on?'ON ✓':'OFF')+'</button></div>'+
+  (m.on?
+    '<div style="background:#080814;border-radius:8px;padding:10px;font-size:10px;line-height:2;color:#888">'+
+    '<div>5m: <strong style="color:#ffd740">$'+S.cfg.s5+'</strong> next bet ('+m.mult5+'x) · '+m.loss5+' consec. loss(es)</div>'+
+    '<div>15m: <strong style="color:#ffd740">$'+S.cfg.s15+'</strong> next bet ('+m.mult15+'x) · '+m.loss15+' consec. loss(es)</div>'+
+    '<div style="color:#333360;margin-top:4px">$'+m.base5+' → $'+(m.base5*2)+' → $'+(m.base5*4)+' → $'+(m.base5*8)+' → $'+(m.base5*16)+' → cap $'+m.maxBet+'</div></div>':
+    '<div style="font-size:9px;color:#333360;line-height:1.7">Double stake after each loss, reset to base on first win.<br>Sequence: $'+S.cfg.s5+' → $'+(S.cfg.s5*2)+' → $'+(S.cfg.s5*4)+' → $'+(S.cfg.s5*8)+' → cap $180</div>')+
+  '</div>'+
+
+  // Force + Reset
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+  '<button onclick="if(!S.active5&&S.botOn){bot5();}" style="padding:12px;border-radius:10px;border:1px solid rgba(0,230,118,.3);background:rgba(0,230,118,.07);color:#00e676;font-family:inherit;font-size:10px;cursor:pointer">▶ Force 5m</button>'+
+  '<button onclick="if(!S.active15&&S.botOn){bot15();}" style="padding:12px;border-radius:10px;border:1px solid rgba(119,153,255,.3);background:rgba(119,153,255,.07);color:#7799ff;font-family:inherit;font-size:10px;cursor:pointer">▶ Force 15m</button></div>'+
+  '<button onclick="if(confirm(\'Reset all data to $1000?\')){S.bal=1000;S.startBal=1000;S.trades=[];S.active5=null;S.active15=null;S.log=[];S.cycles=0;S.mart.mult5=1;S.mart.mult15=1;S.mart.loss5=0;S.mart.loss15=0;S.cfg.s5=10;S.cfg.s15=10;localStorage.removeItem(KEY);addLog(\'🔄 Reset to $1000\',\'info\');render();}" style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,23,68,.3);background:rgba(255,23,68,.07);color:#ff1744;font-family:inherit;font-size:10px;cursor:pointer">⚠️ RESET BALANCE & ALL TRADES</button>';
+}
+
+function renderLog(){
+  const cols={info:'#7799ff',data:'#c0c0e0',ai:'#ffd740',trade:'#00e676',result:'#00c853',skip:'#333360',warn:'#ff1744',ok:'#00c853'};
+  return '<div class="row" style="margin-bottom:14px"><div style="font-size:11px;color:#333360;letter-spacing:3px">ACTIVITY LOG</div>'+
+  '<button onclick="S.log=[];render()" style="background:transparent;border:1px solid #151530;border-radius:6px;color:#333360;padding:4px 10px;font-family:inherit;font-size:9px;cursor:pointer">CLEAR</button></div>'+
+  (S.log.length===0?'<div style="text-align:center;color:#333360;font-size:11px;padding:40px">Start the bot to see logs</div>':
+  S.log.map(l=>'<div style="padding:8px 0;border-bottom:1px solid #0f0f20">'+
+  '<div style="display:flex;justify-content:space-between;gap:8px">'+
+  '<div style="font-size:10px;color:'+(cols[l.type]||'#c0c0e0')+';flex:1;line-height:1.5">'+l.msg+'</div>'+
+  '<div style="font-size:8px;color:#1a1a3a;white-space:nowrap">'+new Date(l.ts).toLocaleTimeString()+'</div></div>'+
+  (l.price?'<div style="font-size:8px;color:#1a1a3a">$'+fmt(l.price)+'</div>':'')+
+  '</div>').join(''));
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MAIN RENDER
+// ─────────────────────────────────────────────────────────────
+function render(){
+  const hp=document.getElementById('hp'),hb=document.getElementById('hb');
+  if(hp){hp.textContent=S.price?'$'+fmt(S.price):'Loading...';hp.style.color=S.price?'#fff':'#888';}
+  const tb=trueBalance();
+  if(hb){hb.textContent='$'+tb.toLocaleString(undefined,{maximumFractionDigits:2});hb.style.color=tb>=S.startBal?'#00e676':'#ff1744';}
+  const el=document.getElementById('content');
+  if(!el)return;
+  if(S.screen==='dash')      el.innerHTML=renderDash();
+  else if(S.screen==='perf') el.innerHTML=renderPerf();
+  else if(S.screen==='bot')  el.innerHTML=renderBot();
+  else                       el.innerHTML=renderLog();
+  renderCountdowns();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────
+addLog('🚀 BTC AutoTrader v3 ready','info');
+addLog('💡 Go to BOT tab to configure, then toggle BOT ON','info');
+addLog('⏱️ Bot syncs to Binance clock before first trade','info');
+setInterval(save, 60000); // autosave every 60s
+fetchData();
+render();
+</script>
+</body>
+</html>
